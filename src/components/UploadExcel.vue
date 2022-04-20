@@ -29,7 +29,7 @@
           :key="sheet"
         ></el-tab-pane>
       </el-tabs>
-      <el-button v-show="JSON.stringify(tableData) != '[]'" size="mini" type="primary" @click="pushData">输出该表数据</el-button>
+      <el-button v-show="JSON.stringify(tableData) !== '[]'" size="mini" type="primary" @click="pushData">输出该表数据</el-button>
       <el-table :data="tableData" border highlight-current-row style="width: 100%;margin-top:20px;">
         <el-table-column v-for="item of tableHeader" :prop="item" :label="item" :key="item" />
       </el-table>
