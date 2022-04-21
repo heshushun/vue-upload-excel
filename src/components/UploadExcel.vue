@@ -22,7 +22,7 @@
 
         <div class="dropShow" >
             <el-button type="text" class="dropShowBtn" @click="closeDrop">
-                {{word}} <i :class="showDrop ? 'el-icon-arrow-up': 'el-icon-arrow-down'"></i>
+                {{closeDropBtnText}} <i :class="showDrop ? 'el-icon-arrow-up': 'el-icon-arrow-down'"></i>
             </el-button>
         </div>
 
@@ -40,12 +40,12 @@
             <el-button v-show="hasTableData()" size="mini" type="primary" @click="clearFilter">重置所有筛选</el-button>
             <el-table :data="tables" ref="filterTable" stripe border :height="tableHeight" highlight-current-row style="width: 100%;margin-top:20px;">
                 <template v-for="(item, index) in tableHeader">
-                    <el-table-column v-if="index === 0" :prop="item" :label="item" :key="item" :filters="filterData(item)" :filter-method="filterHandler" sortable fixed/>
-                    <el-table-column v-if="index > 0" :prop="item" :label="item" :key="item" :filters="filterData(item)" :filter-method="filterHandler" sortable/>
+                    <el-table-column v-if="index === 0" :prop="item" :label="item" :key="item" :filters="filterData(item)" :filter-method="filterHandler" sortable width="80px" fixed></el-table-column>
+                    <af-table-column v-if="index > 0" :prop="item" :label="item" :key="item" :filters="filterData(item)" :filter-method="filterHandler" sortable></af-table-column>
                 </template>
-                <el-table-column v-if="hasTableData()" align="right">
+                <el-table-column v-if="hasTableData()" align="right" fixed="right" width="180">
                     <template slot="header" slot-scope="{}">
-                        <el-input v-model="search" size="mini" placeholder="输入关键字搜索"/>
+                        <el-input v-model="search" suffix-icon="el-icon-search" size="mini" placeholder="关键字搜索"/>
                     </template>
                     <template slot-scope="scope">
                         <el-button size="mini" type="primary" @click="handleEdit(scope.$index, scope.row)" icon="el-icon-edit"></el-button>
@@ -73,8 +73,8 @@
             return {
                 loading: false,
                 excelData: {
-                    headerList: null,
-                    resultsList: null,
+                    headerList: [],
+                    resultsList: [],
                     sheetList: []
                 },
 
@@ -159,6 +159,7 @@
             //读取上传文件数据
             readerData(rawFile) {
                 this.loading = true;
+                const fileName = rawFile.name.split('.')[0];
                 return new Promise((resolve, reject) => {
                     const reader = new FileReader();
                     reader.onload = e => {
@@ -170,14 +171,21 @@
                         let headerList = [];
                         let resultsList = [];
                         let newWorkSheet = "";
+                        let newSheetList = [];
                         //2.传回所有工作表的表头和数据
                         for (let i = 0; i < sheetList.length; i++) {
                             newWorkSheet = workbook.Sheets[sheetList[i]];
                             // newWorkSheet = this.formatSheet(workbook.Sheets[SheetList[i]]);
                             headerList.push(this.getHeaderRow(newWorkSheet));
                             resultsList.push(XLSX.utils.sheet_to_json(newWorkSheet));
+                            const sheetName = fileName+'-'+sheetList[i];
+                            if (this.excelData.sheetList.indexOf(sheetName) === -1) {
+                                newSheetList.push(sheetName)
+                            }else {
+                                newSheetList.push(sheetName+'.')
+                            }
                         }
-                        this.generateData({ headerList, resultsList, sheetList });
+                        this.generateData({ headerList, resultsList, newSheetList });
                         this.loading = false;
                         resolve();
                         if (!reader) {
@@ -189,11 +197,14 @@
             },
 
             //生成表格数据
-            generateData({ headerList, resultsList, sheetList }) {
-                this.excelData.headerList = headerList;
-                this.excelData.resultsList = resultsList;
-                this.excelData.sheetList = sheetList;
+            generateData({ headerList, resultsList, newSheetList }) {
+                this.excelData.headerList = [...this.excelData.headerList, ...headerList];
+                this.excelData.resultsList = [...this.excelData.resultsList, ...resultsList];
+                this.excelData.sheetList = [...this.excelData.sheetList, ...newSheetList];
                 this.onSuccess && this.onSuccess(this.excelData);
+                if (this.excelData.sheetList.length > 0) {
+                    this.chooseTable = (this.excelData.sheetList.length-1).toString();
+                }
                 this.tableData = this.excelData.resultsList[this.chooseTable];
                 this.tableHeader = this.excelData.headerList[this.chooseTable];
                 this.filterData = this.genFilterData;
@@ -299,7 +310,6 @@
             // 收缩导入窗
             closeDrop() {
                 this.showDrop = !this.showDrop;
-                console.info(this.showDrop);
                 if (!this.showDrop) {
                     this.setTableHeight(180);
                 }else {
@@ -321,7 +331,8 @@
                 }
                 return this.tableData
             },
-            word() {
+            // 窗口收起/展开 文本
+            closeDropBtnText() {
                 if (this.showDrop === false) {
                     return "展开导入";
                 } else {
