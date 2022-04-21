@@ -9,7 +9,7 @@
                 accept=".xlsx, .xls"
                 @change="handleClick"
         />
-        <div class="drop" @drop="handleDrop" @dragover="handleDragover" @dragenter="handleDragover">
+        <div class="drop" v-if="showDrop" @drop="handleDrop" @dragover="handleDragover" @dragenter="handleDragover">
             拖动Excel文件到此处或者
             <el-button
                     :loading="loading"
@@ -18,6 +18,12 @@
                     type="primary"
                     @click="handleUpload"
             >选择文件</el-button>
+        </div>
+
+        <div class="dropShow" >
+            <el-button type="text" class="dropShowBtn" @click="closeDrop">
+                {{word}} <i :class="showDrop ? 'el-icon-arrow-up': 'el-icon-arrow-down'"></i>
+            </el-button>
         </div>
 
         <!-- 数据显示区域 -->
@@ -31,15 +37,14 @@
                 ></el-tab-pane>
             </el-tabs>
             <!--<el-button v-show="JSON.stringify(tableData) !== '[]'" size="mini" type="primary" @click="pushData">输出该表数据</el-button>-->
-            <el-button v-show="JSON.stringify(tableData) !== '[]'" size="mini" type="primary" @click="clearFilter">清除所有过滤器</el-button>
-            <el-table :data="tableData.filter(data => !search || data.name.toLowerCase().includes(search.toLowerCase()))"
-                      ref="filterTable" stripe border :height="Height" highlight-current-row style="width: 100%;margin-top:20px;">
+            <el-button v-show="hasTableData()" size="mini" type="primary" @click="clearFilter">重置所有筛选</el-button>
+            <el-table :data="tables" ref="filterTable" stripe border :height="tableHeight" highlight-current-row style="width: 100%;margin-top:20px;">
                 <template v-for="(item, index) in tableHeader">
-                    <el-table-column v-if="index <= 0" :prop="item" :label="item" :key="item" :filters="filterData(item)" :filter-method="filterHandler" sortable fixed/>
+                    <el-table-column v-if="index === 0" :prop="item" :label="item" :key="item" :filters="filterData(item)" :filter-method="filterHandler" sortable fixed/>
                     <el-table-column v-if="index > 0" :prop="item" :label="item" :key="item" :filters="filterData(item)" :filter-method="filterHandler" sortable/>
                 </template>
-                <el-table-column align="right">
-                    <template slot="header">
+                <el-table-column v-if="hasTableData()" align="right">
+                    <template slot="header" slot-scope="{}">
                         <el-input v-model="search" size="mini" placeholder="输入关键字搜索"/>
                     </template>
                     <template slot-scope="scope">
@@ -84,8 +89,15 @@
 
                 search: '',
 
-                Height: 0
+                showDrop: true,
+
+                tableHeight: 0
             };
+        },
+        mounted () {
+            this.$nextTick(function() {
+                this.setTableHeight(320);
+            });
         },
         methods: {
 
@@ -238,11 +250,8 @@
             },
 
             // 设置table高度
-            setHeight () {
-                this.$nextTick(() => {
-                    this.Height = window.innerHeight - 300;
-                });
-                console.log("Height",this.Height);
+            setTableHeight (v) {
+                this.tableHeight = window.innerHeight - v;
             },
 
             // 清除所有过滤器
@@ -272,18 +281,54 @@
                 return newFilterData
             },
 
+            // 处理修改
             handleEdit(index, row) {
                 console.log(index, row);
             },
 
+            // 处理删除
             handleDelete(index, row) {
                 console.log(index, row);
+            },
+
+            // 是否有表数据
+            hasTableData() {
+                return JSON.stringify(this.tableData) !== '[]'
+            },
+
+            // 收缩导入窗
+            closeDrop() {
+                this.showDrop = !this.showDrop;
+                console.info(this.showDrop);
+                if (!this.showDrop) {
+                    this.setTableHeight(180);
+                }else {
+                    this.setTableHeight(320);
+                }
             }
 
         },
-        mounted () {
-            this.setHeight()
-        },
+        computed: {
+            // 模糊搜索
+            tables() {
+                const search = this.search;
+                if (search) {
+                    return this.tableData.filter(data => {
+                        return Object.keys(data).some(key => {
+                            return String(data[key]).toLowerCase().includes(search.toLowerCase())
+                        })
+                    })
+                }
+                return this.tableData
+            },
+            word() {
+                if (this.showDrop === false) {
+                    return "展开导入";
+                } else {
+                    return "收起导入";
+                }
+            },
+        }
     };
 </script>
 
@@ -303,6 +348,19 @@
         text-align: center;
         color: #bbb;
         position: relative;
+    }
+    .dropShow {
+        width: 600px;
+        height: 20px;
+        margin: 0 auto;
+        text-align: center;
+        color: #bbb;
+    }
+    .dropShowBtn {
+        width: 300px;
+        height: 15px;
+        margin: 0 auto;
+        text-align: center;
     }
 
 </style>
