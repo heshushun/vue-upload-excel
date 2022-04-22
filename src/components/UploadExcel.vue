@@ -28,12 +28,14 @@
 
         <!-- 数据显示区域 -->
         <div v-if="showData">
-            <el-tabs v-model="chooseTable" @tab-click="tabClick">
+            <el-tabs v-model="chooseTable" @tab-click="tabClick" @tab-remove="removeTab">
                 <el-tab-pane
+                        closable
                         v-for="(sheet,index) of excelData.sheetList"
                         :label="sheet"
                         :name="index.toString()"
                         :key="sheet"
+                        v-show="isRemoveTab(index.toString())"
                 ></el-tab-pane>
             </el-tabs>
             <!--<el-button v-show="JSON.stringify(tableData) !== '[]'" size="mini" type="primary" @click="pushData">输出该表数据</el-button>-->
@@ -80,17 +82,21 @@
 
                 // 选择页签
                 chooseTable: 0,
-                // 当前页签 数据
+                // 当前页签数据
                 tableData: [],
                 // 当前页签 表头数据
                 tableHeader: [],
-
+                // 筛选数据
                 filterData: Function,
-
+                // 关键字搜索
                 search: '',
-
+                // 是否展开收起导入框
                 showDrop: true,
-
+                // sheet计数
+                sheetMap: {},
+                // 删除标签列表
+                removeTabList: [],
+                // 表格内容高度
                 tableHeight: 0
             };
         },
@@ -178,11 +184,14 @@
                             // newWorkSheet = this.formatSheet(workbook.Sheets[SheetList[i]]);
                             headerList.push(this.getHeaderRow(newWorkSheet));
                             resultsList.push(XLSX.utils.sheet_to_json(newWorkSheet));
-                            const sheetName = fileName+'-'+sheetList[i];
+                            // const sheetName = fileName+'-'+sheetList[i];
+                            const sheetName = fileName;
                             if (this.excelData.sheetList.indexOf(sheetName) === -1) {
-                                newSheetList.push(sheetName)
+                                this.sheetMap[sheetName] = 1;
+                                newSheetList.push(sheetName);
                             }else {
-                                newSheetList.push(sheetName+'.')
+                                this.sheetMap[sheetName] = this.sheetMap[sheetName] + 1;
+                                newSheetList.push(sheetName+'-('+this.sheetMap[sheetName]+')');
                             }
                         }
                         this.generateData({ headerList, resultsList, newSheetList });
@@ -205,9 +214,14 @@
                 if (this.excelData.sheetList.length > 0) {
                     this.chooseTable = (this.excelData.sheetList.length-1).toString();
                 }
-                this.tableData = this.excelData.resultsList[this.chooseTable];
-                this.tableHeader = this.excelData.headerList[this.chooseTable];
-                this.filterData = this.genFilterData;
+                if (this.excelData.headerList.length > parseInt(this.chooseTable))  {
+                    this.tableData = this.excelData.resultsList[this.chooseTable];
+                    this.tableHeader = this.excelData.headerList[this.chooseTable];
+                    this.filterData = this.genFilterData;
+                }else {
+                    this.tableData = [];
+                    this.tableHeader = [];
+                }
             },
 
             // 固定数据
@@ -250,9 +264,48 @@
             // 页签切换
             tabClick(tab) {
                 this.chooseTable = tab.name;
-                this.tableData = this.excelData.resultsList[this.chooseTable];
-                this.tableHeader = this.excelData.headerList[this.chooseTable];
-                this.filterData = this.genFilterData;
+                if (this.excelData.headerList.length > parseInt(this.chooseTable)) {
+                    this.tableData = this.excelData.resultsList[this.chooseTable];
+                    this.tableHeader = this.excelData.headerList[this.chooseTable];
+                }else {
+                    this.tableData = [];
+                    this.tableHeader = [];
+                }
+            },
+
+            // 页签删除 (逻辑删除)
+            removeTab(tabIndex) {
+                console.info("11111", tabIndex);
+                if (this.chooseTable === tabIndex){
+                    this.excelData.sheetList.forEach((sheetTab, index) => {
+                        if (tabIndex !== index.toString() && !this.isRemoveTab(index.toString())){
+                            this.chooseTable = index.toString()
+                        }
+                    });
+
+                    if (this.excelData.headerList.length > parseInt(this.chooseTable)) {
+                        this.tableData = this.excelData.resultsList[this.chooseTable];
+                        this.tableHeader = this.excelData.headerList[this.chooseTable];
+                    }else {
+                        this.tableData = [];
+                        this.tableHeader = [];
+                    }
+                }
+                console.info("2222", this.removeTabList, tabIndex);
+                if (this.removeTabList.indexOf(tabIndex) === -1) {
+                    this.removeTabList.push(tabIndex)
+                }
+            },
+
+            // 是否删除标签
+            isRemoveTab(pos) {
+                console.info("!!!!", this.removeTabList, pos, this.removeTabList.indexOf(pos) !== -1);
+                return this.removeTabList.indexOf(pos) !== -1;
+            },
+
+            // 获取标签个数
+            getTabLen() {
+                return this.excelData.headerList.length - this.removeTabList.length;
             },
 
             // 输出数据
@@ -350,7 +403,7 @@
     }
     .drop {
         border: 2px dashed #bbb;
-        width: 600px;
+        width: 900px;
         height: 160px;
         line-height: 160px;
         margin: 0 auto;
@@ -361,14 +414,14 @@
         position: relative;
     }
     .dropShow {
-        width: 600px;
-        height: 20px;
+        width: 900px;
+        height: 25px;
         margin: 0 auto;
         text-align: center;
         color: #bbb;
     }
     .dropShowBtn {
-        width: 300px;
+        width: 600px;
         height: 15px;
         margin: 0 auto;
         text-align: center;
