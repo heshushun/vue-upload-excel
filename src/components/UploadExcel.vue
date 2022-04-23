@@ -28,26 +28,38 @@
 
         <!-- 数据显示区域 -->
         <div v-if="showData">
+            <!-- 页签 -->
             <el-tabs v-model="chooseTable" @tab-click="tabClick" @tab-remove="removeTab">
                 <el-tab-pane
+                        v-for="sheet in activeTabList"
+                        :label="sheet.tabName"
+                        :name="sheet.idx"
+                        :key="sheet.tabName"
                         closable
-                        v-for="(sheet,index) of excelData.sheetList"
-                        :label="sheet"
-                        :name="index.toString()"
-                        :key="sheet"
-                        v-show="isRemoveTab(index.toString())"
                 ></el-tab-pane>
             </el-tabs>
-            <!--<el-button v-show="JSON.stringify(tableData) !== '[]'" size="mini" type="primary" @click="pushData">输出该表数据</el-button>-->
-            <el-button v-show="hasTableData()" size="mini" type="primary" @click="clearFilter">重置所有筛选</el-button>
-            <el-table :data="tables" ref="filterTable" stripe border :height="tableHeight" highlight-current-row style="width: 100%;margin-top:20px;">
+
+            <!-- 搜索条件 -->
+            <el-filter
+                    v-show="hasTableData()"
+                    :data="filterInfo.data"
+                    :field-list="filterInfo.fieldList"
+                    :list-type-info="filterInfo.listTypeInfo"
+                    @handleFilter="handleFilter"
+                    @handleReset="handleReset"
+                    @handleEvent="handleEvent">
+            </el-filter>
+
+            <!-- 表格 -->
+            <el-table :data="tables"  ref="filterTable" stripe border :height="tableHeight" highlight-current-row style="width: 100%;margin-top:20px;">
                 <template v-for="(item, index) in tableHeader">
-                    <el-table-column v-if="index === 0" :prop="item" :label="item" :key="item" :filters="filterData(item)" :filter-method="filterHandler" sortable width="80px" fixed></el-table-column>
+                    <el-table-column v-if="index === 0" :prop="item" :label="item" :key="item" :filters="filterData(item)" :filter-method="filterHandler" sortable width="100px" fixed></el-table-column>
                     <af-table-column v-if="index > 0" :prop="item" :label="item" :key="item" :filters="filterData(item)" :filter-method="filterHandler" sortable></af-table-column>
                 </template>
                 <el-table-column v-if="hasTableData()" align="right" fixed="right" width="180">
                     <template slot="header" slot-scope="{}">
-                        <el-input v-model="search" suffix-icon="el-icon-search" size="mini" placeholder="关键字搜索"/>
+                        <!--<el-input v-model="search" suffix-icon="el-icon-search" size="mini" placeholder="关键字搜索"/>-->
+                        <el-button size="mini" type="success" round @click="clearFilter">重置所有筛选</el-button>
                     </template>
                     <template slot-scope="scope">
                         <el-button size="mini" type="primary" @click="handleEdit(scope.$index, scope.row)" icon="el-icon-edit"></el-button>
@@ -62,7 +74,12 @@
 
 <script>
     import XLSX from "xlsx";
+    import ElFilter from "./ElFilter.vue";
+
     export default {
+        components: {
+            ElFilter
+        },
         props: {
             beforeUpload: Function,
             onSuccess: Function,
@@ -75,29 +92,53 @@
             return {
                 loading: false,
                 excelData: {
-                    headerList: [],
-                    resultsList: [],
+                    headerList: [],  // [[tableHeader]]
+                    resultsList: [], // [[tableData]]
                     sheetList: []
                 },
 
                 // 选择页签
-                chooseTable: 0,
-                // 当前页签数据
+                chooseTable: '9999',
+                // 当前页签 表数据
                 tableData: [],
                 // 当前页签 表头数据
                 tableHeader: [],
+
+                // 删除的标签列表 ["1", "3"]
+                removeTabList: [],
+                // 激活的页签列表 [{tabName: "tab1", idx: "2"}]
+                activeTabList: [],
+                // 页签名计数 {tabName: count}
+                tabNameMap: {},
+
                 // 筛选数据
                 filterData: Function,
+                // ID搜索
+                searchID: '',
                 // 关键字搜索
                 search: '',
                 // 是否展开收起导入框
                 showDrop: true,
-                // sheet计数
-                sheetMap: {},
-                // 删除标签列表
-                removeTabList: [],
                 // 表格内容高度
-                tableHeight: 0
+                tableHeight: 0,
+
+                // el-filter 过滤信息
+                filterInfo: {
+                    // 搜索字段
+                    data: {
+                        name: null,
+                        age: null,
+                    },
+                    // 条件配置项
+                    fieldList: [
+                        { label: 'ID', type: 'input', value: 'id', clearable: true},
+                        { label: '关键字', type: 'input', value: 'search', clearable: true },
+                    ],
+                    // 下拉数据配置项
+                    listTypeInfo: {
+                    }
+                },
+
             };
         },
         mounted () {
@@ -181,17 +222,16 @@
                         //2.传回所有工作表的表头和数据
                         for (let i = 0; i < sheetList.length; i++) {
                             newWorkSheet = workbook.Sheets[sheetList[i]];
-                            // newWorkSheet = this.formatSheet(workbook.Sheets[SheetList[i]]);
                             headerList.push(this.getHeaderRow(newWorkSheet));
                             resultsList.push(XLSX.utils.sheet_to_json(newWorkSheet));
-                            // const sheetName = fileName+'-'+sheetList[i];
-                            const sheetName = fileName;
-                            if (this.excelData.sheetList.indexOf(sheetName) === -1) {
-                                this.sheetMap[sheetName] = 1;
-                                newSheetList.push(sheetName);
+                            // const tabName = fileName+'-'+sheetList[i];
+                            const tabName = fileName;
+                            if (this.excelData.sheetList.indexOf(tabName) === -1) {
+                                this.tabNameMap[tabName] = 1;
+                                newSheetList.push(tabName);
                             }else {
-                                this.sheetMap[sheetName] = this.sheetMap[sheetName] + 1;
-                                newSheetList.push(sheetName+'-('+this.sheetMap[sheetName]+')');
+                                this.tabNameMap[tabName] = this.tabNameMap[tabName] + 1;
+                                newSheetList.push(tabName+'-('+this.tabNameMap[tabName]+')');
                             }
                         }
                         this.generateData({ headerList, resultsList, newSheetList });
@@ -214,14 +254,10 @@
                 if (this.excelData.sheetList.length > 0) {
                     this.chooseTable = (this.excelData.sheetList.length-1).toString();
                 }
-                if (this.excelData.headerList.length > parseInt(this.chooseTable))  {
-                    this.tableData = this.excelData.resultsList[this.chooseTable];
-                    this.tableHeader = this.excelData.headerList[this.chooseTable];
-                    this.filterData = this.genFilterData;
-                }else {
-                    this.tableData = [];
-                    this.tableHeader = [];
-                }
+                this.updateCurExcelData();
+                this.updateActiveTabList();
+                this.handleReset();
+                this.filterData = this.genFilterData;
             },
 
             // 固定数据
@@ -264,6 +300,51 @@
             // 页签切换
             tabClick(tab) {
                 this.chooseTable = tab.name;
+                this.updateCurExcelData();
+                this.handleReset()
+            },
+
+            // 页签删除 (逻辑删除)
+            removeTab(tabIndex) {
+                if (this.chooseTable === tabIndex) {
+                    this.activeTabList.forEach((activeTab, activeIndex) => {
+                        if (activeTab.idx === tabIndex) {
+                            let nextActiveTab = this.activeTabList[activeIndex + 1] || this.activeTabList[activeIndex - 1];
+                            if (nextActiveTab) {
+                                this.chooseTable = nextActiveTab.idx
+                            } else {
+                                this.chooseTable = '9999'
+                            }
+                            this.updateCurExcelData();
+                        }
+                    });
+                }
+
+                if (this.removeTabList.indexOf(tabIndex) === -1) {
+                    this.removeTabList.push(tabIndex)
+                }
+                this.updateActiveTabList();
+                this.handleReset()
+            },
+
+            // 是否删除标签
+            isRemoveTab(idx) {
+                return this.removeTabList.indexOf(idx) !== -1;
+            },
+
+            // 更新激活页签列表
+            updateActiveTabList() {
+                const newActiveTabList = [];
+                this.excelData.sheetList.forEach((sheetTab, index) => {
+                    if (!this.isRemoveTab(index.toString())){
+                        newActiveTabList.push({tabName: sheetTab, idx: index.toString()})
+                    }
+                });
+                this.activeTabList = newActiveTabList
+            },
+
+            // 更新当前页签数据
+            updateCurExcelData() {
                 if (this.excelData.headerList.length > parseInt(this.chooseTable)) {
                     this.tableData = this.excelData.resultsList[this.chooseTable];
                     this.tableHeader = this.excelData.headerList[this.chooseTable];
@@ -271,41 +352,6 @@
                     this.tableData = [];
                     this.tableHeader = [];
                 }
-            },
-
-            // 页签删除 (逻辑删除)
-            removeTab(tabIndex) {
-                console.info("11111", tabIndex);
-                if (this.chooseTable === tabIndex){
-                    this.excelData.sheetList.forEach((sheetTab, index) => {
-                        if (tabIndex !== index.toString() && !this.isRemoveTab(index.toString())){
-                            this.chooseTable = index.toString()
-                        }
-                    });
-
-                    if (this.excelData.headerList.length > parseInt(this.chooseTable)) {
-                        this.tableData = this.excelData.resultsList[this.chooseTable];
-                        this.tableHeader = this.excelData.headerList[this.chooseTable];
-                    }else {
-                        this.tableData = [];
-                        this.tableHeader = [];
-                    }
-                }
-                console.info("2222", this.removeTabList, tabIndex);
-                if (this.removeTabList.indexOf(tabIndex) === -1) {
-                    this.removeTabList.push(tabIndex)
-                }
-            },
-
-            // 是否删除标签
-            isRemoveTab(pos) {
-                console.info("!!!!", this.removeTabList, pos, this.removeTabList.indexOf(pos) !== -1);
-                return this.removeTabList.indexOf(pos) !== -1;
-            },
-
-            // 获取标签个数
-            getTabLen() {
-                return this.excelData.headerList.length - this.removeTabList.length;
             },
 
             // 输出数据
@@ -330,9 +376,9 @@
             },
 
             // 去重
-            unique(arrs) {
+            unique(arr) {
                 const res = new Map();
-                return arrs.filter((arr) => !res.has(arr) && res.set(arr, 1))
+                return arr.filter((arr) => !res.has(arr) && res.set(arr, 1))
             },
 
             // 生成筛选
@@ -368,12 +414,50 @@
                 }else {
                     this.setTableHeight(320);
                 }
+            },
+
+            /** el-filter methods */
+            // 条件搜索
+            handleFilter (row) {
+                console.log(row);
+                if (row.label === "id") {
+                    this.searchID = row.value
+                }
+                if (row.label === "search") {
+                    this.search = row.value
+                }
+            },
+
+            // 条件重置
+            handleReset () {
+                this.searchID = "";
+                this.search = "";
+            },
+
+            // 条件失去焦点事件
+            handleEvent (row) {
+                console.log(row);
+                if (row.label === "id") {
+                    this.searchID = row.value
+                }
+                if (row.label === "search") {
+                    this.search = row.value
+                }
             }
 
         },
         computed: {
-            // 模糊搜索
+            // 搜索
             tables() {
+                const searchID = this.searchID;
+                if (searchID) {
+                    return this.tableData.filter(data => {
+                        if (data['id']||data['Id']||data['ID']){
+                            return String(data['id']||data['Id']||data['ID']) === searchID
+                        }
+                        return true
+                    })
+                }
                 const search = this.search;
                 if (search) {
                     return this.tableData.filter(data => {
