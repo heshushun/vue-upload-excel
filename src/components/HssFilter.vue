@@ -103,6 +103,7 @@
 </template>
 <script>
     export default {
+        name: "HssFilter",
         props: {
             /**字段默认数据 */
             data: {

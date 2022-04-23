@@ -40,7 +40,7 @@
             </el-tabs>
 
             <!-- 搜索条件 -->
-            <el-filter
+            <hss-filter
                     v-show="hasTableData()"
                     :data="filterInfo.data"
                     :field-list="filterInfo.fieldList"
@@ -48,25 +48,30 @@
                     @handleFilter="handleFilter"
                     @handleReset="handleReset"
                     @handleEvent="handleEvent">
-            </el-filter>
+            </hss-filter>
 
             <!-- 表格 -->
-            <el-table :data="tables"  ref="filterTable" stripe border :height="tableHeight" highlight-current-row style="width: 100%;margin-top:20px;">
+            <el-table :data="tableDatas"  ref="table" stripe border :height="tableHeight" highlight-current-row style="width: 100%;margin-top:20px;">
                 <template v-for="(item, index) in tableHeader">
-                    <el-table-column v-if="index === 0" :prop="item" :label="item" :key="item" :filters="filterData(item)" :filter-method="filterHandler" sortable width="100px" fixed></el-table-column>
-                    <af-table-column v-if="index > 0" :prop="item" :label="item" :key="item" :filters="filterData(item)" :filter-method="filterHandler" sortable></af-table-column>
+                    <af-table-column v-if="index === 0" :prop="item" :label="item" :key="item" :filters="filterData(item)" :filter-method="filterHandler" sortable show-overflow-tooltip width="100px" fixed></af-table-column>
+                    <af-table-column v-if="index > 0 && item.length>4" :prop="item" :label="item" :key="item" :filters="filterData(item)" :filter-method="filterHandler" sortable></af-table-column>
+                    <af-table-column v-if="index > 0 && item.length<=4" :prop="item" :label="item" :key="item" :filters="filterData(item)" :filter-method="filterHandler" sortable show-overflow-tooltip width="150px"></af-table-column>
                 </template>
-                <el-table-column v-if="hasTableData()" align="right" fixed="right" width="180">
-                    <template slot="header" slot-scope="{}">
+                <el-table-column v-if="hasTableData()" align="right" fixed="right" show-overflow-tooltip width="150px">
+                    <template slot="header">
                         <!--<el-input v-model="search" suffix-icon="el-icon-search" size="mini" placeholder="关键字搜索"/>-->
                         <el-button size="mini" type="success" round @click="clearFilter">重置所有筛选</el-button>
                     </template>
                     <template slot-scope="scope">
+                        <el-button size="mini" type="success" @click="handleDialogClick(scope.row)" icon="el-icon-tickets"></el-button>
                         <el-button size="mini" type="primary" @click="handleEdit(scope.$index, scope.row)" icon="el-icon-edit"></el-button>
-                        <el-button size="mini" type="danger" @click="handleDelete(scope.$index, scope.row)" icon="el-icon-delete"></el-button>
+                        <!--<el-button size="mini" type="danger" @click="handleDelete(scope.$index, scope.row)" icon="el-icon-delete"></el-button>-->
                     </template>
                 </el-table-column>
             </el-table>
+
+            <hss-dialog :dialogVisible="dialogVisible" :dialogInfo="dialogInfo" @update:dialogVisible="dialogVisibles"></hss-dialog>
+
         </div>
 
     </div>
@@ -74,11 +79,13 @@
 
 <script>
     import XLSX from "xlsx";
-    import ElFilter from "./ElFilter.vue";
+    import HssFilter from "./HssFilter.vue";
+    import HssDialog from "./HssDialog";
 
     export default {
         components: {
-            ElFilter
+            HssFilter,
+            HssDialog
         },
         props: {
             beforeUpload: Function,
@@ -86,6 +93,11 @@
             showData: {
                 type: Boolean,
                 default: false
+            }
+        },
+        watch: {
+            tableDatas() {
+                this.doLayout();
             }
         },
         data() {
@@ -122,12 +134,17 @@
                 // 表格内容高度
                 tableHeight: 0,
 
+                // 控制弹窗 显示
+                dialogVisible: false,
+                // 弹窗数据详细信息
+                dialogInfo:{},
+
                 // el-filter 过滤信息
                 filterInfo: {
                     // 搜索字段
                     data: {
-                        name: null,
-                        age: null,
+                        id: null,
+                        search: null,
                     },
                     // 条件配置项
                     fieldList: [
@@ -147,6 +164,14 @@
             });
         },
         methods: {
+
+            /* 重新渲染table组件 */
+            doLayout(){
+                let that = this;
+                this.$nextTick(() => {
+                    that.$refs.table.doLayout()
+                })
+            },
 
             //选择文件点击上传
             handleClick(e) {
@@ -366,7 +391,7 @@
 
             // 清除所有过滤器
             clearFilter() {
-                this.$refs.filterTable.clearFilter();
+                this.$refs.table.clearFilter();
             },
 
             // 过滤器
@@ -419,7 +444,6 @@
             /** el-filter methods */
             // 条件搜索
             handleFilter (row) {
-                console.log(row);
                 if (row.label === "id") {
                     this.searchID = row.value
                 }
@@ -436,19 +460,30 @@
 
             // 条件失去焦点事件
             handleEvent (row) {
-                console.log(row);
                 if (row.label === "id") {
                     this.searchID = row.value
                 }
                 if (row.label === "search") {
                     this.search = row.value
                 }
+            },
+
+            //点击查看按钮事件
+            handleDialogClick(row) {
+                console.log(row);
+                this.dialogVisible = true;
+                this.dialogInfo = row
+            },
+
+            //子组件传过来的数据
+            dialogVisibles(v){
+                this.dialogVisible = v;
             }
 
         },
         computed: {
             // 搜索
-            tables() {
+            tableDatas() {
                 const searchID = this.searchID;
                 if (searchID) {
                     return this.tableData.filter(data => {
@@ -471,9 +506,9 @@
             // 窗口收起/展开 文本
             closeDropBtnText() {
                 if (this.showDrop === false) {
-                    return "展开导入";
+                    return "展开导入窗";
                 } else {
-                    return "收起导入";
+                    return "收起导入窗";
                 }
             },
         }
@@ -510,5 +545,14 @@
         margin: 0 auto;
         text-align: center;
     }
+
+    ::-webkit-scrollbar{
+        width: 30px; /*滚动条宽度*/
+        height: 30px; /* 滚动条高度 */
+    }
+
+    /*.el-table {*/
+        /*overflow-y: auto !important;*/
+    /*}*/
 
 </style>
